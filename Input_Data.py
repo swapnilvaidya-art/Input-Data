@@ -1,4 +1,3 @@
-
 import os
 import time
 import json
@@ -122,4 +121,3 @@ mins, secs = divmod(elapsed_time, 60)
 print(f"⏱ Total time taken: {int(mins)}m {int(secs)}s")
 
 print("🎯 Only Input Query executed successfully!")
-
