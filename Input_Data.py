@@ -4,9 +4,6 @@ import json
 import requests
 import pandas as pd
 import gspread
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 
 # -------------------- START TIMER --------------------
@@ -58,7 +55,7 @@ METABASE_HEADERS = {
 
 print("✅ Metabase session created")
 
-# -------------------- RETRYABLE METABASE FETCH --------------------
+# -------------------- FETCH WITH RETRY --------------------
 def fetch_with_retry(url, headers, retries=5):
     for attempt in range(1, retries + 1):
         try:
@@ -76,31 +73,27 @@ def fetch_with_retry(url, headers, retries=5):
             else:
                 raise
 
-# -------------------- SAFE GOOGLE SHEETS UPDATE --------------------
+# -------------------- SAFE SHEET UPDATE --------------------
 def safe_update_sheet(worksheet, df, retries=5):
-    print(f"🔄 Updating worksheet: {worksheet.title}")
+
+    values = [df.columns.tolist()] + df.values.tolist()
 
     for attempt in range(1, retries + 1):
         try:
-            # Clear existing content only
+            print(f"🔄 Clearing sheet: {worksheet.title}")
             worksheet.clear()
 
-            # Resize sheet to match dataframe
-            worksheet.resize(rows=len(df) + 1, cols=len(df.columns))
-
-            # Push dataframe
-            set_with_dataframe(
-                worksheet,
-                df,
-                include_index=False,
-                include_column_header=True
+            print(f"⬆️ Writing {len(df)} rows to sheet...")
+            worksheet.update(
+                values,
+                value_input_option="RAW"
             )
 
-            print(f"✅ Sheet updated successfully: {worksheet.title}")
+            print(f"✅ Sheet updated successfully")
             return True
 
         except Exception as e:
-            wait_time = 15 * attempt
+            wait_time = 20 * attempt
             print(f"[Sheets] Attempt {attempt} failed: {e}")
 
             if attempt < retries:
@@ -118,7 +111,6 @@ df_Input = pd.DataFrame(response.json())
 if df_Input.empty:
     print("⚠️ WARNING: Input query returned empty dataset.")
 
-# Ensure required columns exist
 required_cols = [
     'lead_created_on', 'modified_on', 'prospect_email', 'prospect_stage',
     'mx_prospect_status', 'crm_user_role', 'sales_user_email',
@@ -138,7 +130,6 @@ df_Input = df_Input[required_cols]
 
 print("📊 Rows fetched:", len(df_Input))
 
-# -------------------- GOOGLE SHEETS UPDATE --------------------
 print("🔗 Connecting to Google Sheets...")
 sheet = gc.open_by_key(SAK)
 ws_input = sheet.worksheet(TARGET_SHEET)
