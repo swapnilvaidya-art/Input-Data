@@ -128,6 +128,15 @@ if missing_cols:
 
 df_Input = df_Input[required_cols]
 
+# -------------------- CLEAN DATA FOR GOOGLE SHEETS --------------------
+
+# Replace infinite values
+df_Input.replace([float('inf'), float('-inf')], None, inplace=True)
+
+# Replace NaN with None (Google Sheets safe)
+df_Input = df_Input.where(pd.notnull(df_Input), None)
+
+
 print("📊 Rows fetched:", len(df_Input))
 
 print("🔗 Connecting to Google Sheets...")
