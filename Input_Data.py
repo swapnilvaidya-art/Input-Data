@@ -91,8 +91,14 @@ def safe_update_sheet(worksheet, df, retries=5):
             clean_df = clean_df.replace([float("inf"), float("-inf")], "")
             clean_df = clean_df.fillna("")
 
-            # Convert everything explicitly to string
-            values = [list(clean_df.columns)] + clean_df.astype(str).values.tolist()
+           for col in clean_df.columns:
+    if col != "duration":
+        clean_df[col] = clean_df[col].astype(str)
+
+# Ensure duration is numeric
+clean_df["duration"] = pd.to_numeric(clean_df["duration"], errors="coerce").fillna(0)
+
+values = [list(clean_df.columns)] + clean_df.values.tolist()
 
             # 🔥 IMPORTANT: values FIRST, range SECOND
             worksheet.update(
