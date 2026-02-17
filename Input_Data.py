@@ -135,14 +135,27 @@ df_Input = df_Input[required_cols]
 
 # -------------------- HARD CLEAN FOR GOOGLE SHEETS --------------------
 
-# Replace infinities
-df_Input.replace([np.inf, -np.inf], np.nan, inplace=True)
+import numpy as np
+import math
 
-# Ensure duration is numeric
-df_Input["duration"] = pd.to_numeric(df_Input["duration"], errors="coerce")
+# Replace infinities with None
+df_Input.replace([np.inf, -np.inf], None, inplace=True)
 
-# Replace NaN with None (IMPORTANT for JSON)
-df_Input = df_Input.where(pd.notnull(df_Input), None)
+# Ensure duration is numeric (if exists)
+if "duration" in df_Input.columns:
+    df_Input["duration"] = pd.to_numeric(df_Input["duration"], errors="coerce")
+
+# Convert dataframe to pure Python native types
+def clean_value(x):
+    if x is None:
+        return None
+    if isinstance(x, float):
+        if math.isnan(x) or math.isinf(x):
+            return None
+        return float(x)
+    return x
+
+df_Input = df_Input.apply(lambda col: col.map(clean_value))
 
 
 
