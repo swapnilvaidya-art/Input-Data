@@ -132,14 +132,15 @@ df_Input = df_Input[required_cols]
 
 import numpy as np
 
-# Replace inf / -inf
+# Replace inf values
 df_Input.replace([np.inf, -np.inf], None, inplace=True)
 
 # Replace NaN with None
 df_Input = df_Input.astype(object).where(pd.notnull(df_Input), None)
 
-# Convert everything to pure Python types (critical)
-df_Input = df_Input.applymap(lambda x: x.item() if hasattr(x, "item") else x)
+# Convert numpy types to pure python types (pandas 2.x safe)
+df_Input = df_Input.map(lambda x: x.item() if hasattr(x, "item") else x)
+
 
 
 print("📊 Rows fetched:", len(df_Input))
