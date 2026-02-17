@@ -75,25 +75,30 @@ def fetch_with_retry(url, headers, retries=5):
 
 # -------------------- SAFE SHEET UPDATE --------------------
 def safe_update_sheet(worksheet, df, retries=5):
-
-    values = [df.columns.tolist()] + df.values.tolist()
+    print(f"🔄 Updating worksheet: {worksheet.title}")
 
     for attempt in range(1, retries + 1):
         try:
-            print(f"🔄 Clearing sheet: {worksheet.title}")
-            worksheet.clear()
+            rows = len(df) + 1
+            cols = len(df.columns)
 
-            print(f"⬆️ Writing {len(df)} rows to sheet...")
+            # Clear only A:W (adjust if W changes)
+            worksheet.batch_clear(["A:W"])
+
+            # Prepare values
+            values = [df.columns.tolist()] + df.astype(str).values.tolist()
+
+            # Update only A1:W{rows}
             worksheet.update(
-                values,
-                value_input_option="RAW"
+                f"A1:{chr(64 + cols)}{rows}",
+                values
             )
 
-            print(f"✅ Sheet updated successfully")
+            print(f"✅ Sheet updated successfully: {worksheet.title}")
             return True
 
         except Exception as e:
-            wait_time = 20 * attempt
+            wait_time = 15 * attempt
             print(f"[Sheets] Attempt {attempt} failed: {e}")
 
             if attempt < retries:
@@ -101,6 +106,7 @@ def safe_update_sheet(worksheet, df, retries=5):
                 time.sleep(wait_time)
             else:
                 raise
+
 
 # -------------------- MAIN EXECUTION --------------------
 print("📥 Fetching Input query from Metabase...")
