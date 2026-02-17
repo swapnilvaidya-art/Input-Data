@@ -81,18 +81,24 @@ def safe_update_sheet(worksheet, df, retries=5):
             rows = len(df) + 1
             cols = len(df.columns)
 
-            # Clear ONLY A:W (do not touch Y onward)
+            # Clear only A:W (keep your tagging columns safe)
             worksheet.batch_clear(["A:W"])
 
-            # Prepare values
-            values = [df.columns.tolist()] + df.values.tolist()
+            # Convert dataframe to pure Python list of lists
+            clean_df = df.copy()
 
-            # Proper argument order (no deprecation warning)
+            # Replace problematic values
+            clean_df = clean_df.replace([float("inf"), float("-inf")], "")
+            clean_df = clean_df.fillna("")
+
+            # Convert everything explicitly to string
+            values = [list(clean_df.columns)] + clean_df.astype(str).values.tolist()
+
+            # 🔥 IMPORTANT: values FIRST, range SECOND
             worksheet.update(
-    f"A1:{chr(64 + cols)}{rows}",
-    values
-)
-
+                values=values,
+                range_name=f"A1:{chr(64 + cols)}{rows}"
+            )
 
             print(f"✅ Sheet updated successfully: {worksheet.title}")
             return True
@@ -100,11 +106,13 @@ def safe_update_sheet(worksheet, df, retries=5):
         except Exception as e:
             wait_time = 15 * attempt
             print(f"[Sheets] Attempt {attempt} failed: {e}")
+
             if attempt < retries:
                 print(f"⏳ Retrying in {wait_time}s...")
                 time.sleep(wait_time)
             else:
                 raise
+
 
 # -------------------- MAIN EXECUTION --------------------
 print("📥 Fetching Input query from Metabase...")
