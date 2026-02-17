@@ -3,6 +3,7 @@ import time
 import json
 import requests
 import pandas as pd
+import numpy as np
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -49,8 +50,8 @@ res.raise_for_status()
 token = res.json()['id']
 
 METABASE_HEADERS = {
-    'Content-Type': 'application/json',
-    'X-Metabase-Session': token
+    "Content-Type": "application/json",
+    "X-Metabase-Session": token
 }
 
 print("✅ Metabase session created")
@@ -62,11 +63,9 @@ def fetch_with_retry(url, headers, retries=5):
             response = requests.post(url, headers=headers, timeout=180)
             response.raise_for_status()
             return response
-
         except Exception as e:
             wait_time = 10 * attempt
             print(f"[Metabase] Attempt {attempt} failed: {e}")
-
             if attempt < retries:
                 print(f"⏳ Retrying in {wait_time}s...")
                 time.sleep(wait_time)
@@ -82,16 +81,16 @@ def safe_update_sheet(worksheet, df, retries=5):
             rows = len(df) + 1
             cols = len(df.columns)
 
-            # Clear only A:W (adjust if W changes)
+            # Clear ONLY A:W (do not touch Y onward)
             worksheet.batch_clear(["A:W"])
 
             # Prepare values
-            values = [df.columns.tolist()] + df.astype(str).values.tolist()
+            values = [df.columns.tolist()] + df.values.tolist()
 
-            # Update only A1:W{rows}
+            # Proper argument order (no deprecation warning)
             worksheet.update(
-                f"A1:{chr(64 + cols)}{rows}",
-                values
+                values=values,
+                range_name=f"A1:{chr(64 + cols)}{rows}"
             )
 
             print(f"✅ Sheet updated successfully: {worksheet.title}")
@@ -100,13 +99,11 @@ def safe_update_sheet(worksheet, df, retries=5):
         except Exception as e:
             wait_time = 15 * attempt
             print(f"[Sheets] Attempt {attempt} failed: {e}")
-
             if attempt < retries:
                 print(f"⏳ Retrying in {wait_time}s...")
                 time.sleep(wait_time)
             else:
                 raise
-
 
 # -------------------- MAIN EXECUTION --------------------
 print("📥 Fetching Input query from Metabase...")
@@ -117,6 +114,7 @@ df_Input = pd.DataFrame(response.json())
 if df_Input.empty:
     print("⚠️ WARNING: Input query returned empty dataset.")
 
+# -------------------- REQUIRED COLUMN ORDER (DO NOT CHANGE) --------------------
 required_cols = [
     'lead_created_on', 'modified_on', 'prospect_email', 'prospect_id', 'prospect_stage',
     'mx_prospect_status', 'crm_user_role', 'sales_user_email',
@@ -134,29 +132,25 @@ if missing_cols:
 
 df_Input = df_Input[required_cols]
 
-# -------------------- HARD SANITIZE FOR GOOGLE SHEETS --------------------
-
-import numpy as np
+# -------------------- HARD CLEAN FOR GOOGLE SHEETS --------------------
 
 # Replace infinities
-df_Input.replace([np.inf, -np.inf], None, inplace=True)
+df_Input.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-# Replace NaN with empty string
-df_Input = df_Input.fillna("")
+# Convert numpy types → native python types
+df_Input = df_Input.applymap(
+    lambda x: x.item() if hasattr(x, "item") else x
+)
 
-# Explicitly force duration to numeric
+# Replace NaN with None (IMPORTANT for JSON)
+df_Input = df_Input.where(pd.notnull(df_Input), None)
+
+# Ensure duration is numeric
 df_Input["duration"] = pd.to_numeric(df_Input["duration"], errors="coerce")
-
-# Convert only object columns to string (NOT numeric ones)
-for col in df_Input.columns:
-    if df_Input[col].dtype == "object":
-        df_Input[col] = df_Input[col].astype(str)
-
-
-
 
 print("📊 Rows fetched:", len(df_Input))
 
+# -------------------- GOOGLE SHEETS UPDATE --------------------
 print("🔗 Connecting to Google Sheets...")
 sheet = gc.open_by_key(SAK)
 ws_input = sheet.worksheet(TARGET_SHEET)
