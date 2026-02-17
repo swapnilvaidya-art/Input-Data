@@ -89,9 +89,10 @@ def safe_update_sheet(worksheet, df, retries=5):
 
             # Proper argument order (no deprecation warning)
             worksheet.update(
-                values=values,
-                range_name=f"A1:{chr(64 + cols)}{rows}"
-            )
+    f"A1:{chr(64 + cols)}{rows}",
+    values
+)
+
 
             print(f"✅ Sheet updated successfully: {worksheet.title}")
             return True
@@ -137,16 +138,13 @@ df_Input = df_Input[required_cols]
 # Replace infinities
 df_Input.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-# Convert numpy types → native python types
-df_Input = df_Input.applymap(
-    lambda x: x.item() if hasattr(x, "item") else x
-)
+# Ensure duration is numeric
+df_Input["duration"] = pd.to_numeric(df_Input["duration"], errors="coerce")
 
 # Replace NaN with None (IMPORTANT for JSON)
 df_Input = df_Input.where(pd.notnull(df_Input), None)
 
-# Ensure duration is numeric
-df_Input["duration"] = pd.to_numeric(df_Input["duration"], errors="coerce")
+
 
 print("📊 Rows fetched:", len(df_Input))
 
