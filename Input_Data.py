@@ -132,14 +132,15 @@ df_Input = df_Input[required_cols]
 
 import numpy as np
 
-# Replace inf values
+# Replace infinities
 df_Input.replace([np.inf, -np.inf], None, inplace=True)
 
-# Replace NaN with None
-df_Input = df_Input.astype(object).where(pd.notnull(df_Input), None)
+# Replace NaN with empty string
+df_Input = df_Input.fillna("")
 
-# Convert numpy types to pure python types (pandas 2.x safe)
-df_Input = df_Input.map(lambda x: x.item() if hasattr(x, "item") else x)
+# Convert EVERYTHING to string
+df_Input = df_Input.astype(str)
+
 
 
 
