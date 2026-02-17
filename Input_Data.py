@@ -12,112 +12,144 @@ from google.oauth2.service_account import Credentials
 # -------------------- START TIMER --------------------
 start_time = time.time()
 
-# -------------------- ENV & AUTH --------------------
+# -------------------- ENV VARIABLES --------------------
 sec = os.getenv("PRABHAT_SECRET_KEY")
 User_name = os.getenv("USERNAME")
 service_account_json = os.getenv("SERVICE_ACCOUNT_JSON")
-MB_URl = os.getenv("METABASE_URL")
+MB_URL = os.getenv("METABASE_URL")
 QUERY_URL = os.getenv("DAILY_INPUT_QUERY")
 SAK = os.getenv("SHEET_ACCESS_KEY")
+
 TARGET_SHEET = "Helper Call Dump"
-SAK = os.getenv("SHEET_ACCESS_KEY")
 
 if not sec or not service_account_json:
     raise ValueError("❌ Missing environment variables. Check GitHub secrets.")
 
-# Parse service account credentials
+# -------------------- GOOGLE AUTH --------------------
 service_info = json.loads(service_account_json)
+
 creds = Credentials.from_service_account_info(
     service_info,
-    scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    scopes=[
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
 )
+
 gc = gspread.authorize(creds)
 
-# -------------------- CONFIG --------------------
-METABASE_HEADERS = {'Content-Type': 'application/json'}
+# -------------------- METABASE LOGIN --------------------
+print("🔐 Creating Metabase session...")
 
-# Create Metabase session
 res = requests.post(
-    MB_URl,
+    MB_URL,
     headers={"Content-Type": "application/json"},
-    json={"username": User_name, "password": sec}
+    json={"username": User_name, "password": sec},
+    timeout=60
 )
+
 res.raise_for_status()
 token = res.json()['id']
-METABASE_HEADERS['X-Metabase-Session'] = token
+
+METABASE_HEADERS = {
+    'Content-Type': 'application/json',
+    'X-Metabase-Session': token
+}
+
 print("✅ Metabase session created")
 
-# -------------------- UTILITIES --------------------
-def fetch_with_retry(url, headers, retries=5, delay=15):
+# -------------------- RETRYABLE METABASE FETCH --------------------
+def fetch_with_retry(url, headers, retries=5):
     for attempt in range(1, retries + 1):
         try:
-            r = requests.post(url, headers=headers, timeout=120)
-            r.raise_for_status()
-            return r
+            response = requests.post(url, headers=headers, timeout=180)
+            response.raise_for_status()
+            return response
+
         except Exception as e:
+            wait_time = 10 * attempt
             print(f"[Metabase] Attempt {attempt} failed: {e}")
+
             if attempt < retries:
-                time.sleep(delay)
+                print(f"⏳ Retrying in {wait_time}s...")
+                time.sleep(wait_time)
             else:
                 raise
 
-def safe_update_range(worksheet, df, data_range, retries=5, delay=20):
-    print(f"🔄 Preparing to update {worksheet.title} ({data_range})")
-
-    backup_data = worksheet.get(data_range)
-    success = False
+# -------------------- SAFE GOOGLE SHEETS UPDATE --------------------
+def safe_update_sheet(worksheet, df, retries=5):
+    print(f"🔄 Updating worksheet: {worksheet.title}")
 
     for attempt in range(1, retries + 1):
         try:
-            set_with_dataframe(worksheet, df, include_index=False, include_column_header=True, resize=False)
-            print(f"✅ Successfully updated {worksheet.title}")
-            success = True
-            break
+            # Clear existing content only
+            worksheet.clear()
+
+            # Resize sheet to match dataframe
+            worksheet.resize(rows=len(df) + 1, cols=len(df.columns))
+
+            # Push dataframe
+            set_with_dataframe(
+                worksheet,
+                df,
+                include_index=False,
+                include_column_header=True
+            )
+
+            print(f"✅ Sheet updated successfully: {worksheet.title}")
+            return True
+
         except Exception as e:
-            print(f"[Sheets] Attempt {attempt} failed for {worksheet.title}: {e}")
+            wait_time = 15 * attempt
+            print(f"[Sheets] Attempt {attempt} failed: {e}")
+
             if attempt < retries:
-                time.sleep(delay)
+                print(f"⏳ Retrying in {wait_time}s...")
+                time.sleep(wait_time)
             else:
-                print(f"❌ All attempts failed for {worksheet.title}. Restoring backup...")
-                worksheet.update(data_range, backup_data)
-                print(f"✅ Backup restored for {worksheet.title}")
                 raise
 
-    return success
+# -------------------- MAIN EXECUTION --------------------
+print("📥 Fetching Input query from Metabase...")
 
-# -------------------- MAIN LOGIC --------------------
-print("Fetching ONLY Input query...")
+response = fetch_with_retry(QUERY_URL, METABASE_HEADERS)
+df_Input = pd.DataFrame(response.json())
 
-# Fetch data
-input_response = fetch_with_retry(QUERY_URL, METABASE_HEADERS)
-df_Input = pd.DataFrame(input_response.json())
+if df_Input.empty:
+    print("⚠️ WARNING: Input query returned empty dataset.")
 
-# Columns for Input
-common_cols = [
+# Ensure required columns exist
+required_cols = [
     'lead_created_on', 'modified_on', 'prospect_email', 'prospect_stage',
-    'mx_prospect_status', 'crm_user_role', 'sales_user_email', 'mx_utm_medium',
-    'mx_utm_source', 'mx_lead_quality_grade', 'mx_lead_inherent_intent',
-    'mx_priority_status', 'mx_organic_inbound', 'lead_last_call_status',
+    'mx_prospect_status', 'crm_user_role', 'sales_user_email',
+    'mx_utm_medium', 'mx_utm_source', 'mx_lead_quality_grade',
+    'mx_lead_inherent_intent', 'mx_priority_status',
+    'mx_organic_inbound', 'lead_last_call_status',
     'mx_city', 'event', 'current_stage', 'previous_stage',
-    'mx_identifer', 'mx_phoenix_identifer'
+    'mx_identifer', 'mx_phoenix_identifer',
+    'call_type', 'duration'
 ]
 
-df_Input = df_Input[common_cols + ['call_type', 'duration']]
+missing_cols = [col for col in required_cols if col not in df_Input.columns]
+if missing_cols:
+    raise ValueError(f"❌ Missing columns from query: {missing_cols}")
 
-print("Connecting to Google Sheets...")
+df_Input = df_Input[required_cols]
 
+print("📊 Rows fetched:", len(df_Input))
+
+# -------------------- GOOGLE SHEETS UPDATE --------------------
+print("🔗 Connecting to Google Sheets...")
 sheet = gc.open_by_key(SAK)
-ws_input = sheet.worksheet("Helper Call Dump")
+ws_input = sheet.worksheet(TARGET_SHEET)
 
-# Update Input sheet safely
-print("Updating Helper Call Dump...")
-safe_update_range(ws_input, df_Input, "A:X")
-
+print("⬆️ Updating Helper Call Dump...")
+safe_update_sheet(ws_input, df_Input)
 
 # -------------------- TIMER SUMMARY --------------------
 end_time = time.time()
-elapsed_time = end_time - start_time
-mins, secs = divmod(elapsed_time, 60)
-print(f"⏱ Total time taken: {int(mins)}m {int(secs)}s")
+elapsed = end_time - start_time
+mins, secs = divmod(elapsed, 60)
 
-print("🎯 Only Input Query executed successfully!")
+print(f"⏱ Total execution time: {int(mins)}m {int(secs)}s")
+print("🎯 Input Data Automation Completed Successfully!")
