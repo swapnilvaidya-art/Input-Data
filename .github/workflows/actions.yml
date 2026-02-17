@@ -2,9 +2,13 @@ name: Run Input_Data.py
 
 on:
   schedule:
-    # Run once per day at 00:30 UTC (6:00 AM IST)
-    - cron: '*/15 * * * *'
+    # Run every 1 hour instead of 15 mins
+    - cron: '0 * * * *'
   workflow_dispatch:
+
+concurrency:
+  group: input-data-job
+  cancel-in-progress: false
 
 jobs:
   run-dump:
@@ -12,19 +16,19 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Setup Python 3.9
-        uses: actions/setup-python@v4
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Execute Input_Data.py safely
+      - name: Execute Input_Data.py
         env:
           PRABHAT_SECRET_KEY: ${{ secrets.PRABHAT_SECRET_KEY }}
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
@@ -34,26 +38,6 @@ jobs:
           SHEET_ACCESS_KEY: ${{ secrets.SHEET_ACCESS_KEY }}
 
         run: |
-          LOCK_FILE=".Input_Data.lock"
-
           echo "Workflow triggered at: $(date -u)"
-
-          if [ -f $LOCK_FILE ]; then
-            echo "⚠️ Previous run still in progress. Exiting."
-            exit 0
-          fi
-
-          touch $LOCK_FILE
           echo "🚀 Running Input_Data.py..."
-          
           python Input_Data.py
-          EXIT_CODE=$?
-
-          rm -f $LOCK_FILE
-
-          if [ $EXIT_CODE -eq 0 ]; then
-            echo "✅ Success!"
-          else
-            echo "❌ Failed with exit code $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
