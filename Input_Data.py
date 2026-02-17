@@ -144,8 +144,13 @@ df_Input.replace([np.inf, -np.inf], None, inplace=True)
 # Replace NaN with empty string
 df_Input = df_Input.fillna("")
 
-# Convert EVERYTHING to string
-df_Input = df_Input.astype(str)
+# Explicitly force duration to numeric
+df_Input["duration"] = pd.to_numeric(df_Input["duration"], errors="coerce")
+
+# Convert only object columns to string (NOT numeric ones)
+for col in df_Input.columns:
+    if df_Input[col].dtype == "object":
+        df_Input[col] = df_Input[col].astype(str)
 
 
 
