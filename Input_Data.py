@@ -81,26 +81,27 @@ def safe_update_sheet(worksheet, df, retries=5):
             rows = len(df) + 1
             cols = len(df.columns)
 
-            # Clear only A:W (keep your tagging columns safe)
+            # Clear only A:W
             worksheet.batch_clear(["A:W"])
 
-            # Convert dataframe to pure Python list of lists
             clean_df = df.copy()
 
-            # Replace problematic values
+            # Replace infinities and NaN
             clean_df = clean_df.replace([float("inf"), float("-inf")], "")
             clean_df = clean_df.fillna("")
 
-           for col in clean_df.columns:
-    if col != "duration":
-        clean_df[col] = clean_df[col].astype(str)
+            # Convert ONLY non-duration columns to string
+            for col in clean_df.columns:
+                if col != "duration":
+                    clean_df[col] = clean_df[col].astype(str)
 
-# Ensure duration is numeric
-clean_df["duration"] = pd.to_numeric(clean_df["duration"], errors="coerce").fillna(0)
+            # Ensure duration is numeric
+            clean_df["duration"] = pd.to_numeric(
+                clean_df["duration"], errors="coerce"
+            ).fillna(0)
 
-values = [list(clean_df.columns)] + clean_df.values.tolist()
+            values = [list(clean_df.columns)] + clean_df.values.tolist()
 
-            # 🔥 IMPORTANT: values FIRST, range SECOND
             worksheet.update(
                 values=values,
                 range_name=f"A1:{chr(64 + cols)}{rows}"
