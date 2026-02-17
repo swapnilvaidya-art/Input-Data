@@ -128,13 +128,18 @@ if missing_cols:
 
 df_Input = df_Input[required_cols]
 
-# -------------------- CLEAN DATA FOR GOOGLE SHEETS --------------------
+# -------------------- HARD SANITIZE FOR GOOGLE SHEETS --------------------
 
-# Replace infinite values
-df_Input.replace([float('inf'), float('-inf')], None, inplace=True)
+import numpy as np
 
-# Replace NaN with None (Google Sheets safe)
-df_Input = df_Input.where(pd.notnull(df_Input), None)
+# Replace inf / -inf
+df_Input.replace([np.inf, -np.inf], None, inplace=True)
+
+# Replace NaN with None
+df_Input = df_Input.astype(object).where(pd.notnull(df_Input), None)
+
+# Convert everything to pure Python types (critical)
+df_Input = df_Input.applymap(lambda x: x.item() if hasattr(x, "item") else x)
 
 
 print("📊 Rows fetched:", len(df_Input))
