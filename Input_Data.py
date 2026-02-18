@@ -91,11 +91,18 @@ def safe_update_sheet(worksheet, df, retries=5):
             clean_df = clean_df.fillna("")
 
             # Convert ONLY non-duration columns to string
+            # Convert ONLY non-duration columns to string
             for col in clean_df.columns:
                 if col != "duration":
                     clean_df[col] = clean_df[col].astype(str)
-
-            # Ensure duration is numeric
+            
+            # 🔥 Properly clean duration (fix comma issue)
+            clean_df["duration"] = (
+                clean_df["duration"]
+                    .astype(str)
+                    .str.replace(",", "", regex=False)
+            )
+            
             clean_df["duration"] = pd.to_numeric(
                 clean_df["duration"], errors="coerce"
             ).fillna(0)
