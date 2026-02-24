@@ -146,7 +146,7 @@ required_cols = [
     'mx_organic_inbound', 'lead_last_call_status',
     'mx_city', 'event', 'current_stage', 'previous_stage',
     'mx_identifer', 'mx_phoenix_identifer',
-    'call_type', 'duration'
+    'call_type', 'duration', 'caller'
 ]
 
 missing_cols = [col for col in required_cols if col not in df_Input.columns]
