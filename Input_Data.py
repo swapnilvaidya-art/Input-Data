@@ -81,8 +81,8 @@ def safe_update_sheet(worksheet, df, retries=5):
             rows = len(df) + 1
             cols = len(df.columns)
 
-            # Clear only A:W
-            worksheet.batch_clear(["A:W"])
+            # Clear only A:AD
+            worksheet.batch_clear(["A:AD"])
 
             clean_df = df.copy()
 
@@ -146,7 +146,8 @@ required_cols = [
     'mx_organic_inbound', 'lead_last_call_status',
     'mx_city', 'event', 'current_stage', 'previous_stage',
     'mx_identifer', 'mx_phoenix_identifer',
-    'call_type', 'duration', 'caller'
+    'call_type', 'duration', 'caller',
+    'lead_owner', 'caller_receiver_final', 'event_date', 'team_lead', 'course', 'm0_or_not', 
 ]
 
 missing_cols = [col for col in required_cols if col not in df_Input.columns]
