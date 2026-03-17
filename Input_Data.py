@@ -109,10 +109,18 @@ def safe_update_sheet(worksheet, df, retries=5):
 
             values = [list(clean_df.columns)] + clean_df.values.tolist()
 
+            def col_num_to_letter(n):
+                result = ""
+                while n > 0:
+                    n, remainder = divmod(n - 1, 26)
+                    result = chr(65 + remainder) + result
+                return result
+
             worksheet.update(
                 values=values,
-                range_name=f"A1:{chr(64 + cols)}{rows}"
+                range_name=f"A1:{col_num_to_letter(cols)}{rows}"
             )
+            
 
             print(f"✅ Sheet updated successfully: {worksheet.title}")
             return True
